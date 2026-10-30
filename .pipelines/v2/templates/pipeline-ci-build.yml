@@ -3,6 +3,10 @@ variables:
     value: false
   - name: EnablePipelineCache
     value: true
+  # CodeQL tracing roughly doubles the main build and pushes jobs past their timeout.
+  # .pipelines\v2\codeql.yml scans main on a schedule instead.
+  - name: Codeql.Enabled
+    value: false
 
 parameters:
   - name: buildPlatforms
@@ -19,6 +23,9 @@ parameters:
   - name: runTests
     type: boolean
     default: true
+  - name: runAffectedUiTests
+    type: boolean
+    default: false
   - name: useVSPreview
     type: boolean
     default: false
@@ -79,6 +86,15 @@ stages:
             msBuildCacheIsReadOnly: ${{ parameters.msBuildCacheIsReadOnly }}
             runTests: ${{ parameters.runTests }}
             buildTests: true
+            prepareMwbRuntime: ${{ and(parameters.runAffectedUiTests, eq(platform, 'x64')) }}
+            ${{ if and(parameters.runAffectedUiTests, eq(platform, 'x64')) }}:
+              dependsOn:
+                - Resolve
+              # Resolve is skipped outside PR builds; the ordinary build must still run.
+              condition: and(not(failed()), not(canceled()))
+              variables:
+                MwbSandboxSelected: $[ dependencies.Resolve.outputs['resolve.hasMwbUiTests'] ]
+              mwbRuntimeCondition: and(succeeded(), eq(variables['MwbSandboxSelected'], 'true'))
             useVSPreview: ${{ parameters.useVSPreview }}
             useLatestWinAppSDK: ${{ parameters.useLatestWinAppSDK }}
             ${{ if eq(parameters.useLatestWinAppSDK, true) }}:
@@ -91,6 +107,47 @@ stages:
               artifactName: ${{ parameters.artifactName }}
               metaPackageName: ${{ parameters.metaPackageName }}
             timeoutInMinutes: 90
+
+        - ${{ if eq(parameters.runAffectedUiTests, true) }}:
+          - template: job-resolve-ui-tests.yml
+
+          - ${{ if eq(platform, 'x64') }}:
+            - template: job-test-project.yml
+              parameters:
+                platform: x64Win10
+                configuration: Release
+                buildSource: buildNowSlim
+                useLatestWebView2: ${{ parameters.useLatestWebView2 }}
+                autoSelectUiTests: true
+                dependsOn:
+                  - Build
+                  - Resolve
+                condition: and(succeeded(), eq(dependencies.Resolve.outputs['resolve.hasUiTests'], 'true'))
+
+            - template: job-test-project.yml
+              parameters:
+                platform: x64Win11
+                configuration: Release
+                buildSource: buildNowSlim
+                useLatestWebView2: ${{ parameters.useLatestWebView2 }}
+                autoSelectUiTests: true
+                dependsOn:
+                  - Build
+                  - Resolve
+                condition: and(succeeded(), eq(dependencies.Resolve.outputs['resolve.hasUiTests'], 'true'))
+
+          - ${{ if ne(platform, 'x64') }}:
+            - template: job-test-project.yml
+              parameters:
+                platform: ${{ platform }}
+                configuration: Release
+                buildSource: buildNowSlim
+                useLatestWebView2: ${{ parameters.useLatestWebView2 }}
+                autoSelectUiTests: true
+                dependsOn:
+                  - Build
+                  - Resolve
+                condition: and(succeeded(), eq(dependencies.Resolve.outputs['resolve.hasUiTests'], 'true'))
 
   - stage: Build_SDK
     displayName: Build Command Palette Toolkit SDK

@@ -1,3 +1,7 @@
+trigger: none
+
+pr: none
+
 variables:
   - name: runCodesignValidationInjectionBG
     value: false
@@ -21,11 +25,12 @@ parameters:
     default: false
   - name: buildSource
     type: string
-    default: "latestMainOfficialBuild"
-    displayName: "Build Source"
+    default: "buildNow"
+    displayName: "Build Source (latestMainOfficialBuild and specificBuildId do not support MWB)"
     values:
       - latestMainOfficialBuild
       - buildNow
+      - buildNowSlim
       - specificBuildId
   - name: specificBuildId
     type: string
@@ -37,18 +42,20 @@ parameters:
 
 stages:
   - ${{ each platform in parameters.buildPlatforms }}:
-    # Full build path: build PowerToys + UI tests + run tests
-    - ${{ if eq(parameters.buildSource, 'buildNow') }}:
+    # Full build path: buildNow runs the complete artifact in place; buildNowSlim
+    # downloads and installs its installer. MWB requires one of these current-source paths.
+    - ${{ if or(eq(parameters.buildSource, 'buildNow'), eq(parameters.buildSource, 'buildNowSlim')) }}:
       - template: pipeline-ui-tests-full-build.yml
         parameters:
           platform: ${{ platform }}
+          buildSource: ${{ parameters.buildSource }}
           enableMsBuildCaching: ${{ parameters.enableMsBuildCaching }}
           useVSPreview: ${{ parameters.useVSPreview }}
           useLatestWebView2: ${{ parameters.useLatestWebView2 }}
           uiTestModules: ${{ parameters.uiTestModules }}
 
-    # Official build path: build UI tests only + download official build + run tests  
-    - ${{ if ne(parameters.buildSource, 'buildNow') }}:
+    # Official build path: build UI tests only and download the selected official build.
+    - ${{ if and(ne(parameters.buildSource, 'buildNow'), ne(parameters.buildSource, 'buildNowSlim')) }}:
       - template: pipeline-ui-tests-official-build.yml
         parameters:
           platform: ${{ platform }}

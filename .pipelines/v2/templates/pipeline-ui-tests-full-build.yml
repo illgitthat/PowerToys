@@ -2,6 +2,11 @@
 parameters:
   - name: platform
     type: string
+  # buildNow = download the whole build artifact and run in place; buildNowSlim = download only the
+  # installer from this same full build and install it. Both build the full product in this template.
+  - name: buildSource
+    type: string
+    default: buildNow
   - name: enableMsBuildCaching
     type: boolean
     default: false
@@ -16,7 +21,7 @@ parameters:
     default: []
 
 stages:
-  # Stage 1: Build full PowerToys project
+  # Stage 1: build the product and UI tests from the same source revision.
   - stage: Build_${{ parameters.platform }}
     displayName: Build PowerToys ${{ parameters.platform }}
     dependsOn: []
@@ -39,10 +44,11 @@ stages:
           enableMsBuildCaching: ${{ parameters.enableMsBuildCaching }}
           runTests: false
           buildTests: true
+          prepareMwbRuntime: ${{ and(eq(parameters.platform, 'x64'), or(eq(length(parameters.uiTestModules), 0), containsValue(parameters.uiTestModules, 'MouseWithoutBorders.UITests'))) }}
           useVSPreview: ${{ parameters.useVSPreview }}
           timeoutInMinutes: 90
 
-  # Stage 2: Run UI Tests
+  # Stage 2: run the selected suites on each applicable Windows test image.
   - ${{ if eq(parameters.platform, 'x64') }}:
     - stage: Test_x64Win10_FullBuild
       displayName: Test x64Win10 (Full Build)
@@ -53,7 +59,7 @@ stages:
             platform: x64Win10
             configuration: Release
             useLatestWebView2: ${{ parameters.useLatestWebView2 }}
-            buildSource: 'buildNow'
+            buildSource: ${{ parameters.buildSource }}
             uiTestModules: ${{ parameters.uiTestModules }}
 
     - stage: Test_x64Win11_FullBuild
@@ -65,7 +71,7 @@ stages:
             platform: x64Win11
             configuration: Release
             useLatestWebView2: ${{ parameters.useLatestWebView2 }}
-            buildSource: 'buildNow'
+            buildSource: ${{ parameters.buildSource }}
             uiTestModules: ${{ parameters.uiTestModules }}
 
   - ${{ if ne(parameters.platform, 'x64') }}:
@@ -78,5 +84,5 @@ stages:
             platform: ${{ parameters.platform }}
             configuration: Release
             useLatestWebView2: ${{ parameters.useLatestWebView2 }}
-            buildSource: 'buildNow'
+            buildSource: ${{ parameters.buildSource }}
             uiTestModules: ${{ parameters.uiTestModules }}
