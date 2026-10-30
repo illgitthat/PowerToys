@@ -112,9 +112,10 @@ namespace KeyboardManagerEditorUI.Pages
         private string? _appFilter; // null = all apps, GlobalOnlyToken = global only, else a specific app name.
         private bool _suppressFilterEvents;
 
-        // Cached composite formats for the (localized) bulk-delete strings, parsed lazily on first use.
+        // Cached composite formats for the (localized) bulk-delete and text-trigger strings, parsed lazily on first use.
         private CompositeFormat? _deleteSelectedFormat;
         private CompositeFormat? _bulkDeleteConfirmationFormat;
+        private CompositeFormat? _textTriggerDisplayFormat;
 
         // Options shown in the app-filter combo box: [All apps], [Global only], then each distinct app name.
         public ObservableCollection<string> AppFilterOptions { get; } = new();
@@ -1211,9 +1212,10 @@ namespace KeyboardManagerEditorUI.Pages
             }
         }
 
-        private static string GetTextTriggerDisplayName(string triggerText)
+        private string GetTextTriggerDisplayName(string triggerText)
         {
-            return string.Format(CultureInfo.CurrentCulture, ResourceHelper.GetString("TextTriggerDisplayFormat"), triggerText);
+            _textTriggerDisplayFormat ??= CompositeFormat.Parse(ResourceHelper.GetString("TextTriggerDisplayFormat"));
+            return string.Format(CultureInfo.CurrentCulture, _textTriggerDisplayFormat, triggerText);
         }
 
         private void LoadProgramShortcuts()
